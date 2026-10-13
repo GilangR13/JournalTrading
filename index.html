@@ -65,12 +65,14 @@
   <div class="result-box" id="mmResult" aria-live="polite">Isi saldo dan batas rugi harian untuk melihat perkiraan ketahanan modal.</div>
   <p class="help">“Habis” berarti hasil hitung teoretis mencapai nol. Jika broker menutup posisi lebih awal, biaya, gap, atau slippage terjadi, saldo dapat turun lebih cepat. Batas harian adalah batas berhenti trading, bukan target rugi. Hasil bulan/tahun memakai jumlah hari trading per bulan yang kamu isi.</p>
  </div>
- <div class="card"><h2>Rencana profit · proyeksi target</h2><p class="muted">Pilih target bersih mingguan atau bulanan. Web menghitung acuan harian, proyeksi 5 dan 6 bulan, serta sisa target bulan berjalan. Semua hasil adalah simulasi, bukan janji profit.</p>
+ <div class="card"><h2>Rencana profit · proyeksi target</h2><p class="muted">Pilih target bersih mingguan atau bulanan dan tentukan sendiri berapa bulan atau tahun yang ingin dihitung. Web juga menunjukkan acuan harian dan sisa target bulan berjalan. Semua hasil adalah simulasi, bukan janji profit.</p>
   <div class="grid">
    <div class="field"><label>Periode target</label><select id="mmTargetPeriod"><option value="week">Per minggu</option><option value="month">Per bulan</option></select></div>
    <div class="field"><label>Hari trading rencana per minggu</label><input id="mmDaysWeek" type="number" min="1" max="7" step="1" inputmode="numeric" value="5"></div>
    <div class="field"><label>Target profit bersih terkecil</label><input id="mmTargetMin" type="number" min="0" step="any" inputmode="decimal" placeholder="Contoh: 75"></div>
    <div class="field"><label>Target profit bersih terbesar</label><input id="mmTargetMax" type="number" min="0" step="any" inputmode="decimal" placeholder="Contoh: 150"></div>
+   <div class="field"><label>Lama proyeksi</label><input id="mmHorizonCount" type="number" min="1" step="1" inputmode="numeric" value="6"></div>
+   <div class="field"><label>Satuan durasi proyeksi</label><select id="mmHorizonUnit"><option value="month">Bulan</option><option value="year">Tahun</option></select></div>
    <div class="field"><label>Hasil bersih bulan berjalan (opsional; boleh negatif)</label><input id="mmMonthActual" type="number" step="any" inputmode="decimal" placeholder="Contoh: -20"></div>
    <div class="field"><label>Hari trading tersisa bulan ini (opsional)</label><input id="mmDaysLeft" type="number" min="1" max="31" step="1" inputmode="numeric" placeholder="Contoh: 15"></div>
   </div>
@@ -203,22 +205,27 @@ $('saveManual').onclick=()=>{const date=$('mDate').value,closeDate=$('mCloseDate
  if(!(lot>0&&entry>0&&exit>0&&Number.isFinite(profit))||(outcome!=='flat'&&magnitude<0)){toast('Lot dan harga harus positif; besar hasil harus nol atau positif.');return}
  const entryWib=date+' '+(entryTime?(entryTime.length===5?entryTime+':00':entryTime):'00:00:00'),closeWib=closeDate+' '+(closeTime?(closeTime.length===5?closeTime+':00':closeTime):'00:00:00');if(entryWib>closeWib){toast('Waktu keluar tidak boleh lebih awal dari waktu entry.');return}
  data.trades.unshift({id:crypto.randomUUID(),date:closeDate,entryWib,closeWib,entryNY:'',closeNY:'',symbol,side:$('mSide').value,lot,entry,exit,profit,accountCurrency:'',mood:$('mMood').value,reason:$('mReason').value,extra:'',plan:$('mPlan').value,orderType:$('mOrderType').value,origin:'Input manual',timeSource:'Diisi manual dalam WIB',entryTimeSource:'Diisi manual dalam WIB',needsReview:false,createdAt:Date.now()});persist();$('manualForm').classList.add('hidden');renderTrades();renderOverview();toast('Trade manual tersimpan.')};
-const mmIds=['mmUnit','mmCapital','mmDailyMin','mmDailyMax','mmTradeRisk','mmDaysMonth','mmTargetPeriod','mmDaysWeek','mmTargetMin','mmTargetMax','mmMonthActual','mmDaysLeft'];
+const mmIds=['mmUnit','mmCapital','mmDailyMin','mmDailyMax','mmTradeRisk','mmDaysMonth','mmTargetPeriod','mmDaysWeek','mmTargetMin','mmTargetMax','mmHorizonCount','mmHorizonUnit','mmMonthActual','mmDaysLeft'];
 function renderMoney(){const balance=Number($('mmCapital').value),low=Number($('mmDailyMin').value),high=Number($('mmDailyMax').value),riskText=$('mmTradeRisk').value,risk=Number(riskText),daysMonth=Number($('mmDaysMonth').value),unit=$('mmUnit').value,box=$('mmResult');if(!$('mmCapital').value||!$('mmDailyMin').value||!$('mmDailyMax').value){box.textContent='Isi saldo dan batas rugi harian untuk melihat perkiraan ketahanan modal.';return}if(!(balance>0&&low>0&&high>=low&&Number.isInteger(daysMonth)&&daysMonth>=1&&daysMonth<=31)){box.textContent='Isi saldo dan batas rugi dengan angka positif. Batas terbesar harus sama atau lebih besar dari batas terkecil; hari trading per bulan 1–31.';return}if(riskText!==''&&!(risk>0)){box.textContent='Risiko per trade harus lebih besar dari nol, atau kosongkan kolomnya.';return}const first=Math.ceil(balance/high),last=Math.ceil(balance/low),f=n=>n.toLocaleString('id-ID'),range=(a,b)=>a===b?f(a):f(a)+'–'+f(b),duration=n=>`${numFmt(n/daysMonth,1)} bulan / ${numFmt(n/daysMonth/12,2)} tahun`,lossPct=numFmt(high/balance*100,2),tradePart=riskText!==''?`<p>Jika setiap trade rugi ${numFmt(risk,2)} ${unit}, saldo teoretis habis setelah <b>${f(Math.ceil(balance/risk))} loss berturut-turut</b>. ${risk>high?'Risiko satu trade melebihi batas rugi harian terbesar.':'Batas harian terbesar setara sekitar '+f(Math.floor(high/risk))+' loss penuh per hari.'}</p>`:'<p>Isi <b>risiko per trade</b> untuk menghitung jumlah loss berturut-turut.</p>';box.innerHTML=`<strong>Perkiraan ketahanan: ${range(first,last)} hari trading</strong><p>Dengan saldo ${numFmt(balance,2)} ${unit} dan rugi harian ${numFmt(low,2)}–${numFmt(high,2)} ${unit} setiap hari, saldo teoretis mencapai nol sekitar hari ke-${range(first,last)}. Itu sekitar <b>${duration(first)}</b> hingga <b>${duration(last)}</b> pada ${f(daysMonth)} hari trading/bulan.</p><p>Batas rugi harian terbesar = <b>${lossPct}%</b> dari saldo saat ini.</p>${tradePart}`}
 function renderProfitPlan(){
  const box=$('mmProfitResult'),unit=$('mmUnit').value,period=$('mmTargetPeriod').value;
  const minText=$('mmTargetMin').value,maxText=$('mmTargetMax').value;
  if(minText===''||maxText===''){box.textContent='Isi target profit bersih terkecil dan terbesar untuk melihat proyeksi.';return}
  const min=Number(minText),max=Number(maxText),daysWeek=Number($('mmDaysWeek').value),daysMonth=Number($('mmDaysMonth').value);
+ const horizonCount=Number($('mmHorizonCount').value),horizonUnit=$('mmHorizonUnit').value;
  if(!(Number.isFinite(min)&&Number.isFinite(max)&&min>0&&max>=min&&Number.isInteger(daysWeek)&&daysWeek>=1&&daysWeek<=7&&Number.isInteger(daysMonth)&&daysMonth>=1&&daysMonth<=31)){
   box.textContent='Target harus positif; batas terbesar minimal sama dengan batas terkecil. Isi hari trading per minggu 1–7 dan per bulan 1–31.';return
  }
+ if(!Number.isInteger(horizonCount)||horizonCount<1||horizonCount>(horizonUnit==='year'?100:1200)){
+  box.textContent='Isi lama proyeksi berupa angka bulat: 1–1.200 bulan atau 1–100 tahun.';return
+ }
  const monthFactor=52/12,monthMin=period==='week'?min*monthFactor:min,monthMax=period==='week'?max*monthFactor:max;
+ const horizonMonths=horizonUnit==='year'?horizonCount*12:horizonCount,horizonLabel=`${horizonCount} ${horizonUnit==='year'?'tahun':'bulan'}`;
  const dailyMin=period==='week'?min/daysWeek:min/daysMonth,dailyMax=period==='week'?max/daysWeek:max/daysMonth;
  const fmt=n=>numFmt(n,2),range=(a,b)=>a===b?fmt(a):`${fmt(a)}–${fmt(b)}`;
  const periodLabel=period==='week'?'minggu':'bulan',dayLabel=period==='week'?`pada ${daysWeek} hari trading/minggu`:`pada ${daysMonth} hari trading/bulan`;
  const balanceText=$('mmCapital').value,balance=Number(balanceText);
- const balancePart=balanceText!==''&&Number.isFinite(balance)&&balance>0?`<p>Jika modal tetap ${fmt(balance)} ${unit}, perkiraan saldo setelah 5 bulan menjadi <b>${range(balance+monthMin*5,balance+monthMax*5)} ${unit}</b>; setelah 6 bulan <b>${range(balance+monthMin*6,balance+monthMax*6)} ${unit}</b>. Ini penjumlahan sederhana, bukan bunga majemuk.</p>`:'';
+ const balancePart=balanceText!==''&&Number.isFinite(balance)&&balance>0?`<p>Dengan modal awal ${fmt(balance)} ${unit}, perkiraan saldo setelah ${horizonLabel}: <b>${range(balance+monthMin*horizonMonths,balance+monthMax*horizonMonths)} ${unit}</b>. Ini penjumlahan sederhana, bukan bunga majemuk.</p>`:'';
  const actualText=$('mmMonthActual').value,leftText=$('mmDaysLeft').value;
  let progress='';
  if(actualText!==''||leftText!==''){
@@ -230,9 +237,9 @@ function renderProfitPlan(){
    progress=`<p><b>Evaluasi bulan berjalan:</b> hasil bersih ${fmt(actual)} ${unit}; sisa menuju target bulanan ${range(gapMin,gapMax)} ${unit}. Dibagi ${left} hari tersisa, setara rata-rata ${range(gapMin/left,gapMax/left)} ${unit}/hari. Angka ini untuk evaluasi saja; jangan menaikkan lot, risiko, atau melewati batas rugi harian untuk mengejarnya.</p>`
   }
  }
- box.innerHTML=`<strong>Acuan harian: ${range(dailyMin,dailyMax)} ${unit}</strong><p>Target bersih ${periodLabel} ${range(min,max)} ${unit}, ${dayLabel}. Setara sekitar <b>${range(monthMin,monthMax)} ${unit}/bulan</b>.</p><p>Jika target bersih tercapai konsisten, akumulasi profit: <b>5 bulan ${range(monthMin*5,monthMax*5)} ${unit}</b> · <b>6 bulan ${range(monthMin*6,monthMax*6)} ${unit}</b>.</p>${balancePart}${progress}<p class="footnote">Konversi target mingguan memakai 52 minggu ÷ 12 bulan ≈ 4,33 minggu/bulan. Hasil aktual dapat berbeda karena minggu rugi, biaya trading, dan perubahan ukuran posisi.</p>`
+ box.innerHTML=`<strong>Acuan harian: ${range(dailyMin,dailyMax)} ${unit}</strong><p>Target bersih ${periodLabel} ${range(min,max)} ${unit}, ${dayLabel}. Setara sekitar <b>${range(monthMin,monthMax)} ${unit}/bulan</b>.</p><p>Jika target bersih tercapai konsisten selama <b>${horizonLabel}</b>, perkiraan akumulasi profit: <b>${range(monthMin*horizonMonths,monthMax*horizonMonths)} ${unit}</b>.</p>${balancePart}${progress}<p class="footnote">Konversi target mingguan memakai 52 minggu ÷ 12 bulan ≈ 4,33 minggu/bulan. Hasil aktual dapat berbeda karena minggu rugi, biaya trading, dan perubahan ukuran posisi.</p>`
 }
-function loadMoneyProfile(unit){const profile=data.money[unit]||{};for(const id of mmIds.filter(x=>x!=='mmUnit'))$(id).value=profile[id]??(id==='mmDaysMonth'?'20':id==='mmDaysWeek'?'5':id==='mmTargetPeriod'?'week':'')}
+function loadMoneyProfile(unit){const profile=data.money[unit]||{};for(const id of mmIds.filter(x=>x!=='mmUnit'))$(id).value=profile[id]??(id==='mmDaysMonth'?'20':id==='mmDaysWeek'?'5':id==='mmTargetPeriod'?'week':id==='mmHorizonCount'?'6':id==='mmHorizonUnit'?'month':'')}
 $('mmUnit').value=data.money.activeUnit==='USD'?'USD':'USC';loadMoneyProfile($('mmUnit').value);renderMoney();renderProfitPlan();
 $('mmUnit').addEventListener('change',()=>{data.money.activeUnit=$('mmUnit').value;persist();loadMoneyProfile($('mmUnit').value);renderMoney();renderProfitPlan()});
 for(const id of mmIds.filter(x=>x!=='mmUnit'))$(id).addEventListener('input',()=>{const unit=$('mmUnit').value;data.money.activeUnit=unit;data.money[unit]=Object.fromEntries(mmIds.filter(key=>key!=='mmUnit').map(key=>[key,$(key).value]));persist();renderMoney();renderProfitPlan()});
