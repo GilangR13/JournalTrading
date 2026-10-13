@@ -59,9 +59,11 @@
    <div class="field"><label>Saldo/modal aktif</label><input id="mmCapital" type="number" min="0" step="any" inputmode="decimal" placeholder="Contoh: 1000"></div>
    <div class="field"><label>Batas rugi harian terkecil</label><input id="mmDailyMin" type="number" min="0" step="any" inputmode="decimal" placeholder="Contoh: 10"></div>
    <div class="field"><label>Batas rugi harian terbesar</label><input id="mmDailyMax" type="number" min="0" step="any" inputmode="decimal" placeholder="Contoh: 12"></div>
-   <div class="field"><label>Risiko per trade (opsional)</label><input id="mmTradeRisk" type="number" min="0" step="any" inputmode="decimal" placeholder="Untuk hitung jumlah loss beruntun"></div>
+   <div class="field"><label>Risiko per SL (%)</label><input id="mmRiskPercent" type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="Contoh: 0.5 atau 1"></div>
+   <div class="field"><label>Risiko nominal per trade (opsional)</label><input id="mmTradeRisk" type="number" min="0" step="any" inputmode="decimal" placeholder="Dipakai jika persen dikosongkan"></div>
    <div class="field"><label>Hari trading per bulan</label><input id="mmDaysMonth" type="number" min="1" max="31" step="1" inputmode="numeric" value="20"></div>
   </div>
+  <div class="result-box" id="mmRiskResult" aria-live="polite">Isi saldo dan risiko per SL (%) untuk melihat batas rugi satu trade.</div>
   <div class="result-box" id="mmResult" aria-live="polite">Isi saldo dan batas rugi harian untuk melihat perkiraan ketahanan modal.</div>
   <p class="help">“Habis” berarti hasil hitung teoretis mencapai nol. Jika broker menutup posisi lebih awal, biaya, gap, atau slippage terjadi, saldo dapat turun lebih cepat. Batas harian adalah batas berhenti trading, bukan target rugi. Hasil bulan/tahun memakai jumlah hari trading per bulan yang kamu isi.</p>
  </div>
@@ -205,8 +207,31 @@ $('saveManual').onclick=()=>{const date=$('mDate').value,closeDate=$('mCloseDate
  if(!(lot>0&&entry>0&&exit>0&&Number.isFinite(profit))||(outcome!=='flat'&&magnitude<0)){toast('Lot dan harga harus positif; besar hasil harus nol atau positif.');return}
  const entryWib=date+' '+(entryTime?(entryTime.length===5?entryTime+':00':entryTime):'00:00:00'),closeWib=closeDate+' '+(closeTime?(closeTime.length===5?closeTime+':00':closeTime):'00:00:00');if(entryWib>closeWib){toast('Waktu keluar tidak boleh lebih awal dari waktu entry.');return}
  data.trades.unshift({id:crypto.randomUUID(),date:closeDate,entryWib,closeWib,entryNY:'',closeNY:'',symbol,side:$('mSide').value,lot,entry,exit,profit,accountCurrency:'',mood:$('mMood').value,reason:$('mReason').value,extra:'',plan:$('mPlan').value,orderType:$('mOrderType').value,origin:'Input manual',timeSource:'Diisi manual dalam WIB',entryTimeSource:'Diisi manual dalam WIB',needsReview:false,createdAt:Date.now()});persist();$('manualForm').classList.add('hidden');renderTrades();renderOverview();toast('Trade manual tersimpan.')};
-const mmIds=['mmUnit','mmCapital','mmDailyMin','mmDailyMax','mmTradeRisk','mmDaysMonth','mmTargetPeriod','mmDaysWeek','mmTargetMin','mmTargetMax','mmHorizonCount','mmHorizonUnit','mmMonthActual','mmDaysLeft'];
-function renderMoney(){const balance=Number($('mmCapital').value),low=Number($('mmDailyMin').value),high=Number($('mmDailyMax').value),riskText=$('mmTradeRisk').value,risk=Number(riskText),daysMonth=Number($('mmDaysMonth').value),unit=$('mmUnit').value,box=$('mmResult');if(!$('mmCapital').value||!$('mmDailyMin').value||!$('mmDailyMax').value){box.textContent='Isi saldo dan batas rugi harian untuk melihat perkiraan ketahanan modal.';return}if(!(balance>0&&low>0&&high>=low&&Number.isInteger(daysMonth)&&daysMonth>=1&&daysMonth<=31)){box.textContent='Isi saldo dan batas rugi dengan angka positif. Batas terbesar harus sama atau lebih besar dari batas terkecil; hari trading per bulan 1–31.';return}if(riskText!==''&&!(risk>0)){box.textContent='Risiko per trade harus lebih besar dari nol, atau kosongkan kolomnya.';return}const first=Math.ceil(balance/high),last=Math.ceil(balance/low),f=n=>n.toLocaleString('id-ID'),range=(a,b)=>a===b?f(a):f(a)+'–'+f(b),duration=n=>`${numFmt(n/daysMonth,1)} bulan / ${numFmt(n/daysMonth/12,2)} tahun`,lossPct=numFmt(high/balance*100,2),tradePart=riskText!==''?`<p>Jika setiap trade rugi ${numFmt(risk,2)} ${unit}, saldo teoretis habis setelah <b>${f(Math.ceil(balance/risk))} loss berturut-turut</b>. ${risk>high?'Risiko satu trade melebihi batas rugi harian terbesar.':'Batas harian terbesar setara sekitar '+f(Math.floor(high/risk))+' loss penuh per hari.'}</p>`:'<p>Isi <b>risiko per trade</b> untuk menghitung jumlah loss berturut-turut.</p>';box.innerHTML=`<strong>Perkiraan ketahanan: ${range(first,last)} hari trading</strong><p>Dengan saldo ${numFmt(balance,2)} ${unit} dan rugi harian ${numFmt(low,2)}–${numFmt(high,2)} ${unit} setiap hari, saldo teoretis mencapai nol sekitar hari ke-${range(first,last)}. Itu sekitar <b>${duration(first)}</b> hingga <b>${duration(last)}</b> pada ${f(daysMonth)} hari trading/bulan.</p><p>Batas rugi harian terbesar = <b>${lossPct}%</b> dari saldo saat ini.</p>${tradePart}`}
+const mmIds=['mmUnit','mmCapital','mmDailyMin','mmDailyMax','mmRiskPercent','mmTradeRisk','mmDaysMonth','mmTargetPeriod','mmDaysWeek','mmTargetMin','mmTargetMax','mmHorizonCount','mmHorizonUnit','mmMonthActual','mmDaysLeft'];
+function renderMoney(){
+ const balanceText=$('mmCapital').value,percentText=$('mmRiskPercent').value,manualText=$('mmTradeRisk').value;
+ const balance=Number(balanceText),percent=Number(percentText),manualRisk=Number(manualText);
+ const low=Number($('mmDailyMin').value),high=Number($('mmDailyMax').value),daysMonth=Number($('mmDaysMonth').value);
+ const unit=$('mmUnit').value,riskBox=$('mmRiskResult'),box=$('mmResult');
+ const validBalance=balanceText!==''&&Number.isFinite(balance)&&balance>0;
+ const validPercent=percentText!==''&&Number.isFinite(percent)&&percent>0&&percent<=100;
+ const risk=validPercent?balance*percent/100:manualRisk;
+ const hasRisk=validPercent||(percentText===''&&manualText!==''&&Number.isFinite(manualRisk)&&manualRisk>0);
+ if(percentText!==''){
+  if(!validPercent)riskBox.textContent='Risiko per SL harus lebih dari 0% dan paling banyak 100%.';
+  else if(!validBalance)riskBox.textContent='Isi saldo/modal aktif dengan angka lebih dari nol untuk menghitung risiko per SL.';
+  else riskBox.innerHTML=`<strong>Risiko 1 kali SL: ${numFmt(risk,risk<0.01?4:2)} ${unit}</strong><p>${numFmt(balance,2)} ${unit} × ${numFmt(percent,2)}% = <b>${numFmt(risk,risk<0.01?4:2)} ${unit}</b>.${unit==='USC'?` Setara sekitar $${numFmt(risk/100,risk/100<0.01?4:2)}.`:''} Jika saldo berubah, nominal risiko ikut berubah.</p>${manualText!==''?'<p>Karena risiko persen terisi, angka risiko nominal manual diabaikan.</p>':''}`;
+ }else riskBox.textContent=manualText!==''?'Risiko persen kosong; angka risiko nominal manual dipakai untuk perkiraan ketahanan modal.':'Isi saldo dan risiko per SL (%) untuk melihat batas rugi satu trade.';
+ if(!balanceText||!$('mmDailyMin').value||!$('mmDailyMax').value){box.textContent='Isi saldo dan batas rugi harian untuk melihat perkiraan ketahanan modal.';return}
+ if(!validBalance||!(low>0&&high>=low&&Number.isInteger(daysMonth)&&daysMonth>=1&&daysMonth<=31)){box.textContent='Isi saldo dan batas rugi dengan angka positif. Batas terbesar harus sama atau lebih besar dari batas terkecil; hari trading per bulan 1–31.';return}
+ if(percentText!==''&&!validPercent){box.textContent='Perbaiki risiko per SL (%), atau kosongkan kolomnya.';return}
+ if(percentText===''&&manualText!==''&&!(manualRisk>0)){box.textContent='Risiko nominal per trade harus lebih besar dari nol, atau kosongkan kolomnya.';return}
+ const first=Math.ceil(balance/high),last=Math.ceil(balance/low),f=n=>n.toLocaleString('id-ID');
+ const range=(a,b)=>a===b?f(a):f(a)+'–'+f(b),duration=n=>`${numFmt(n/daysMonth,1)} bulan / ${numFmt(n/daysMonth/12,2)} tahun`;
+ const lossPct=numFmt(high/balance*100,2);
+ const tradePart=hasRisk?`<p>Jika nominal risiko saat ini dianggap tetap sebesar ${numFmt(risk,risk<0.01?4:2)} ${unit} pada setiap trade, saldo teoretis habis setelah <b>${f(Math.ceil(balance/risk))} loss berturut-turut</b>. ${risk>high?'Risiko satu trade melebihi batas rugi harian terbesar.':'Batas harian terbesar setara sekitar '+f(Math.floor(high/risk))+' loss penuh per hari.'}</p>`:'<p>Isi <b>risiko per SL (%)</b> atau risiko nominal untuk menghitung jumlah loss berturut-turut.</p>';
+ box.innerHTML=`<strong>Perkiraan ketahanan: ${range(first,last)} hari trading</strong><p>Dengan saldo ${numFmt(balance,2)} ${unit} dan rugi harian ${numFmt(low,2)}–${numFmt(high,2)} ${unit} setiap hari, saldo teoretis mencapai nol sekitar hari ke-${range(first,last)}. Itu sekitar <b>${duration(first)}</b> hingga <b>${duration(last)}</b> pada ${f(daysMonth)} hari trading/bulan.</p><p>Batas rugi harian terbesar = <b>${lossPct}%</b> dari saldo saat ini.</p>${tradePart}`;
+}
 function renderProfitPlan(){
  const box=$('mmProfitResult'),unit=$('mmUnit').value,period=$('mmTargetPeriod').value;
  const minText=$('mmTargetMin').value,maxText=$('mmTargetMax').value;
