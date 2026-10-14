@@ -65,6 +65,18 @@
     return {actual,forecast,previous,comparison};
   }
 
+  function displayScreenshotNumbers(row) {
+    if(row.currency==='CNY' || row.level==='watch') return '';
+    const values=[row.actual,row.forecast,row.previous].filter(Boolean);
+    if(!values.length)return '';
+    const suspicious=values.some(value=>{
+      const n=Number(value.replace('−','-').replace(',','.').replace(/[^\d.\-]/g,''));
+      return !Number.isFinite(n) || (value.includes('%') && Math.abs(n)>100) || ((row.key==='US_CPI'||row.key==='US_PPI') && value.includes('%') && Math.abs(n)>15);
+    });
+    if(suspicious)return '<br><b>Angka OCR diabaikan:</b> ada angka yang kemungkinan salah terbaca. Panduan waktu tetap memakai jadwal berita.';
+    return `<br><b>Angka pada screenshot:</b> aktual ${safe(row.actual||'belum rilis')} · perkiraan ${safe(row.forecast||'—')} · sebelumnya ${safe(row.previous||'—')}${row.comparison?' · aktual '+safe(row.comparison):''}. Angka ini belum diverifikasi ke sumber data resmi.`;
+  }
+
   function parseEvents(text, fallbackDate, zone) {
     const lines=text.replace(/\r/g,'').split('\n').map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
     const date=screenshotDate(text,fallbackDate), rows=[];
@@ -109,8 +121,10 @@
       const windowText=rel&&level!=='watch'?`Hindari entry ${fmt(start-b*60000)}–${fmt(start+a*60000)} WIB.`:`Untuk ${pair}, tidak ada larangan otomatis dari berita ini.`;
       const source=verified?`<a href="${safe(row.official.url)}" target="_blank" rel="noopener noreferrer">${safe(row.official.source)}</a>`:'Jam hanya dari screenshot; sumber resmi belum cocok secara otomatis.';
       const mismatch=verified&&row.originalWib&&row.originalWib!==row.wib?`<br><b>Jam berbeda:</b> screenshot ${safe(row.originalWib.slice(11))}; jadwal resmi ${safe(row.wib.slice(11))} WIB dipakai.`:'';
-      const figures=row.actual||row.forecast||row.previous?`<br><b>Angka pada screenshot:</b> aktual ${safe(row.actual||'belum rilis')} · perkiraan ${safe(row.forecast||'—')} · sebelumnya ${safe(row.previous||'—')}${row.comparison?' · aktual '+safe(row.comparison):''}. Angka ini belum diverifikasi ke sumber data resmi.`:'';
-      return `<article class="news-item"><span class="pill ${rel?'warn':''}">${rel?'Relevan':'Pantau saja'} · ${safe(level)}</span><h3>${safe(row.title)}</h3><p><b>${safe(row.wib)} WIB · ${safe(row.currency)}</b><br>${source}${mismatch}${figures}<br>${safe(row.why)}<br><b>Aturan:</b> ${safe(windowText)}<br><b>Jika hasil rilis keluar:</b> ${safe(row.scenario)}</p></article>`;
+      const levelName={'very-high':'Sangat tinggi',high:'Tinggi',medium:'Sedang',watch:'Tidak langsung'}[level]||'Belum diketahui';
+      const damaged=/[\[\]¥@£®]|v{3,}/i.test(row.title),period=row.title.match(/\b(MoM|YoY)\b/i)?.[0]||'';
+      const title=verified||damaged&&row.key!=='OTHER'?row.name+(period?' ('+period+')':''):row.title;
+      return `<article class="news-item"><span class="pill ${rel?'warn':''}">${rel?'Relevan':'Pantau saja'} · ${levelName}</span><h3>${safe(title)}</h3><p><b>${safe(row.wib)} WIB · ${safe(row.currency)}</b><br>${source}${mismatch}${displayScreenshotNumbers(row)}<br>${safe(row.why)}<br><b>Aturan:</b> ${safe(windowText)}<br><b>Jika hasil rilis keluar:</b> ${safe(row.scenario)}</p></article>`;
     });
     blocked.sort((a,b)=>a.start-b.start);
     const merged=[];
@@ -160,7 +174,14 @@
       }
       const feed=await feedPromise;
       const unique=[...new Map(rows.map(row=>[row.date+'|'+row.shownTime+'|'+row.currency+'|'+row.title.toLowerCase(),row])).values()];
-      for(const row of unique){const official=feed&&readFeedEvent(feed,row);if(official){row.official=official;row.originalWib=row.wib;row.wib=official.dateWib+' '+official.timeWib}}
+      for(const row of unique){
+        let official=feed&&readFeedEvent(feed,row);
+        if(!official&&feed&&row.currency==='USD'&&/(?:\[|i|l)?hk\b/i.test(row.title)){
+          official=feed.events.find(x=>x.key==='US_CPI'&&x.dateWib===row.wib.slice(0,10)&&x.timeWib===row.wib.slice(11));
+          if(official)Object.assign(row,classify('IHK','USD'));
+        }
+        if(official){row.official=official;row.originalWib=row.wib;row.wib=official.dateWib+' '+official.timeWib}
+      }
       const pair=($('newsPair').value||'XAUUSD').trim().toUpperCase();
       const planned=$('newsDate').value+' '+$('newsTradeTime').value;
       const before=Number($('newsBefore').value),after=Number($('newsAfter').value);

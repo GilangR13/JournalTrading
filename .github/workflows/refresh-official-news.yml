@@ -1,5 +1,9 @@
 name: Refresh official news calendar
 on:
+  push:
+    paths:
+      - 'update-official-news.py'
+      - '.github/workflows/refresh-official-news.yml'
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
