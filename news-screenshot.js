@@ -185,7 +185,7 @@
       const pair=($('newsPair').value||'XAUUSD').trim().toUpperCase();
       const planned=$('newsDate').value+' '+$('newsTradeTime').value;
       const before=Number($('newsBefore').value),after=Number($('newsAfter').value);
-      recommendation(unique,pair,planned,Number.isFinite(before)?Math.max(0,before):60,Number.isFinite(after)?Math.max(0,after):120,feed?.updatedAt?`sumber BLS diperbarui ${feed.updatedAt.slice(0,16)} UTC; hanya berita BLS yang dapat dicocokkan secara resmi.`:null);
+      recommendation(unique,pair,planned,Number.isFinite(before)?Math.max(0,before):60,Number.isFinite(after)?Math.max(0,after):120,feed?.updatedAt?`data jadwal BLS tersimpan terakhir diperiksa ${feed.updatedAt.slice(0,16)} UTC; ini bukan pengecekan langsung semua berita hari ini.`:null);
       status.textContent=`${unique.length} baris berita terbaca dari ${imageFiles.length} screenshot. Foto tidak diunggah ke server.`;
     }catch(error){status.textContent='Analisis belum selesai: '+(error.message||error);$('newsImageResult').innerHTML='<div class="result-box">Tidak ada rekomendasi dibuat dari pembacaan yang gagal.</div>'}
     finally{if(worker)await worker.terminate();button.disabled=false}
