@@ -47,6 +47,7 @@
     if(currency==='USD' && /pce|personal consumption/.test(t))return {key:'US_PCE',name:'Inflasi PCE AS',level:'very-high',why:'Ukuran inflasi penting bagi pembahasan kebijakan The Fed.',scenario:'Kejutan terhadap perkiraan dapat mengubah USD dan emas, tanpa arah yang dijamin.'};
     if(currency==='USD' && /gdp|pdb/.test(t))return {key:'US_GDP',name:'PDB AS',level:'high',why:'Perubahan prospek pertumbuhan bisa memengaruhi USD dan suku bunga.',scenario:'Bandingkan aktual, perkiraan, serta revisi data sebelumnya.'};
     if(currency==='USD' && /retail sales|penjualan ritel|\bism\b|pmi/.test(t))return {key:'US_ACTIVITY',name:'Aktivitas ekonomi AS',level:'high',why:'Data permintaan/aktivitas yang mengejutkan dapat menggeser pandangan pasar terhadap ekonomi AS.',scenario:'Arah emas tidak bisa dipastikan sebelum melihat hasil dan respons pasar.'};
+    if(currency==='USD' && /indeks utama|leading index/.test(t))return {key:'US_LEADING',name:'Indeks Utama AS',level:'medium',why:'Menunjukkan perkiraan arah aktivitas ekonomi; dampak langsung ke emas biasanya lebih kecil daripada CPI atau keputusan Fed.',scenario:'Selisih data dari perkiraan belum cukup untuk menentukan arah emas.'};
     if(/\biea\b|oil market|laporan bulanan iea/.test(t))return {key:'IEA',name:'Laporan IEA',level:'watch',why:'Terutama terkait minyak; dampak ke XAUUSD biasanya tidak langsung.',scenario:'Pantau minyak dan USD; laporan ini sendiri bukan sinyal entry emas.'};
     if(currency==='CNY')return {key:'CHINA',name:'Data ekonomi China',level:'watch',why:'Terutama memengaruhi CNY dan pandangan terhadap ekonomi China; hubungan dengan XAUUSD tidak langsung.',scenario:'Angka kuat/lemah tidak otomatis berarti buy/sell emas.'};
     if(/boe|bailey|\bmpc\b/.test(t))return {key:'BOE',name:'Pidato / keputusan Bank of England',level:'high',why:'Terutama memengaruhi GBP jika ada perubahan pandangan tentang suku bunga.',scenario:'Nada lebih ketat bisa mendukung GBP; tidak otomatis menentukan arah XAUUSD.'};
@@ -80,11 +81,17 @@
   function parseEvents(text, fallbackDate, zone) {
     const lines=text.replace(/\r/g,'').split('\n').map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
     const date=screenshotDate(text,fallbackDate), rows=[];
-    for(const line of lines){
-      const match=line.match(timeRow);
+    for(let i=0;i<lines.length;i++){
+      const line=lines[i];
+      let scan=line,match=scan.match(timeRow);
+      // Some phone screenshots put the clock and currency on adjacent OCR lines.
+      if(!match && i+1<lines.length && /(?:^|\s)([01]?\d|2[0-3])[.:]([0-5]\d)\s*$/.test(line)){
+        const next=lines[i+1].match(new RegExp('^('+countryCodes+')\\b','i'));
+        if(next){scan=line+' '+lines[i+1];match=scan.match(timeRow);i++;}
+      }
       if(match){
         const time=match[1].padStart(2,'0')+':'+match[2],currency=match[3].toUpperCase();
-        rows.push({time,currency,lines:[line.slice(match.index+match[0].length).trim()]});
+        rows.push({time,currency,lines:[scan.slice(match.index+match[0].length).trim()]});
       }else if(rows.length && !/^(profit|deposit|balance|kalender ekonomi|hari ini|besok|kemarin|minggu ini)$/i.test(line)) rows.at(-1).lines.push(line);
     }
     return rows.map(row=>{
@@ -123,8 +130,8 @@
       const mismatch=verified&&row.originalWib&&row.originalWib!==row.wib?`<br><b>Jam berbeda:</b> screenshot ${safe(row.originalWib.slice(11))}; jadwal resmi ${safe(row.wib.slice(11))} WIB dipakai.`:'';
       const levelName={'very-high':'Sangat tinggi',high:'Tinggi',medium:'Sedang',watch:'Tidak langsung'}[level]||'Belum diketahui';
       const damaged=/[\[\]¥@£®]|v{3,}/i.test(row.title),period=row.title.match(/\b(MoM|YoY)\b/i)?.[0]||'';
-      const title=verified||damaged&&row.key!=='OTHER'?row.name+(period?' ('+period+')':''):row.title;
-      return `<article class="news-item"><span class="pill ${rel?'warn':''}">${rel?'Relevan':'Pantau saja'} · ${levelName}</span><h3>${safe(title)}</h3><p><b>${safe(row.wib)} WIB · ${safe(row.currency)}</b><br>${source}${mismatch}${displayScreenshotNumbers(row)}<br>${safe(row.why)}<br><b>Aturan:</b> ${safe(windowText)}<br><b>Jika hasil rilis keluar:</b> ${safe(row.scenario)}</p></article>`;
+      const title=verified||['BOE','IEA','US_LEADING'].includes(row.key)||damaged&&row.key!=='OTHER'?row.name+(period?' ('+period+')':''):row.title;
+      return `<article class="news-item"><span class="pill ${rel?'warn':''}">${rel?'Relevan':'Pantau saja'} · ${levelName}</span><h3>${safe(title)}</h3><p><b>${safe(row.wib)} WIB · ${safe(row.currency)}</b><br>${source}${mismatch}<br>${safe(row.why)}<br><b>Aturan:</b> ${safe(windowText)}<br><b>Jika hasil rilis keluar:</b> ${safe(row.scenario)}</p></article>`;
     });
     blocked.sort((a,b)=>a.start-b.start);
     const merged=[];
@@ -133,8 +140,8 @@
     const hit=blocked.find(item=>Number.isFinite(plannedMs)&&plannedMs>=item.start&&plannedMs<=item.end);
     const banner=hit?`<strong>TUNDA entry ${safe(pair)} pada ${safe(planned)} WIB.</strong><p>Berdekatan dengan ${safe(hit.row.title)}. Tunggu lewat jeda dan lihat spread/volatilitas lagi.</p>`:`<strong>${Number.isFinite(plannedMs)?'Jam rencana tidak masuk jeda berita yang terbaca.':'Jadwal berita yang terbaca'}</strong><p>Ini hanya filter berita dari screenshot, bukan sinyal entry atau jaminan tidak ada berita lain. Pastikan spread dan setup sesuai aturanmu.</p>`;
     const windows=merged.length?merged.map(x=>fmt(x.start)+'–'+fmt(x.end)+' WIB').join('<br>'):'Tidak ada rentang larangan otomatis untuk pair ini.';
-    const sourceNote=feedInfo?`Pencocokan daring: ${safe(feedInfo)}`:'Jadwal resmi daring tidak tersedia; hasil hanya berdasarkan screenshot.';
-    view.innerHTML=`<div class="result-box">${banner}<p><b>Rentang hindari entry ${safe(pair)}:</b><br>${windows}</p><p class="help">${sourceNote} Berita yang tidak cocok dengan sumber resmi diberi label screenshot. Jeda berita adalah aturan kehati-hatian, bukan hasil backtest.</p></div>${cards.join('')}`;
+    const sourceNote=feedInfo?`Data resmi tersimpan: ${safe(feedInfo)}`:'Data jadwal resmi tersimpan tidak tersedia; hasil hanya berdasarkan screenshot.';
+    view.innerHTML=`<div class="result-box">${banner}<p><b>Rentang hindari entry ${safe(pair)}:</b><br>${windows}</p><p class="help">${sourceNote} Tidak semua berita pada gambar pasti terbaca. Jeda berita adalah aturan kehati-hatian, bukan hasil backtest.</p></div>${cards.join('')}`;
   }
 
   async function readOfficialFeed() {
@@ -155,6 +162,18 @@
     });
   }
 
+  async function enlarge(file) {
+    const bitmap=await createImageBitmap(file);
+    const canvas=document.createElement('canvas');
+    canvas.width=bitmap.width*2;canvas.height=bitmap.height*2;
+    const context=canvas.getContext('2d',{willReadFrequently:true});
+    context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
+    context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';
+    context.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    bitmap.close();
+    return canvas;
+  }
+
   $('newsImageFiles').addEventListener('change',event=>{imageFiles=[...event.target.files];$('newsImageStatus').textContent=imageFiles.length?imageFiles.length+' screenshot siap dianalisis.':'Pilih screenshot untuk memulai.'});
   $('analyzeNewsImage').addEventListener('click',async()=>{
     const status=$('newsImageStatus'),button=$('analyzeNewsImage');
@@ -169,7 +188,8 @@
       const rows=[];
       for(let i=0;i<imageFiles.length;i++){
         status.textContent=`Membaca screenshot ${i+1}/${imageFiles.length}…`;
-        const result=await worker.recognize(imageFiles[i]);
+        const large=await enlarge(imageFiles[i]);
+        const result=await worker.recognize(large);
         rows.push(...parseEvents(result.data.text||'',$('newsDate').value,$('newsScreenshotZone').value));
       }
       const feed=await feedPromise;
