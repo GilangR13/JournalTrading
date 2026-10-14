@@ -130,7 +130,8 @@
       const mismatch=verified&&row.originalWib&&row.originalWib!==row.wib?`<br><b>Jam berbeda:</b> screenshot ${safe(row.originalWib.slice(11))}; jadwal resmi ${safe(row.wib.slice(11))} WIB dipakai.`:'';
       const levelName={'very-high':'Sangat tinggi',high:'Tinggi',medium:'Sedang',watch:'Tidak langsung'}[level]||'Belum diketahui';
       const damaged=/[\[\]¥@£®]|v{3,}/i.test(row.title),period=row.title.match(/\b(MoM|YoY)\b/i)?.[0]||'';
-      const title=verified||['BOE','IEA','US_LEADING'].includes(row.key)||damaged&&row.key!=='OTHER'?row.name+(period?' ('+period+')':''):row.title;
+      const core=row.key==='US_CPI'&&/\b(?:inti|core)\b/i.test(row.title)?' inti':'';
+      const title=verified||['BOE','IEA','US_LEADING'].includes(row.key)||damaged&&row.key!=='OTHER'?row.name+core+(period?' ('+period+')':''):row.title;
       return `<article class="news-item"><span class="pill ${rel?'warn':''}">${rel?'Relevan':'Pantau saja'} · ${levelName}</span><h3>${safe(title)}</h3><p><b>${safe(row.wib)} WIB · ${safe(row.currency)}</b><br>${source}${mismatch}<br>${safe(row.why)}<br><b>Aturan:</b> ${safe(windowText)}<br><b>Jika hasil rilis keluar:</b> ${safe(row.scenario)}</p></article>`;
     });
     blocked.sort((a,b)=>a.start-b.start);
@@ -205,7 +206,7 @@
       const pair=($('newsPair').value||'XAUUSD').trim().toUpperCase();
       const planned=$('newsDate').value+' '+$('newsTradeTime').value;
       const before=Number($('newsBefore').value),after=Number($('newsAfter').value);
-      recommendation(unique,pair,planned,Number.isFinite(before)?Math.max(0,before):60,Number.isFinite(after)?Math.max(0,after):120,feed?.updatedAt?`data jadwal BLS tersimpan terakhir diperiksa ${feed.updatedAt.slice(0,16)} UTC; ini bukan pengecekan langsung semua berita hari ini.`:null);
+      recommendation(unique,pair,planned,Number.isFinite(before)?Math.max(0,before):60,Number.isFinite(after)?Math.max(0,after):120,feed?.updatedAt?`jadwal BLS terakhir diperiksa ${feed.updatedAt.slice(0,16)} UTC; ini bukan pengecekan langsung semua berita hari ini.`:null);
       status.textContent=`${unique.length} baris berita terbaca dari ${imageFiles.length} screenshot. Foto tidak diunggah ke server.`;
     }catch(error){status.textContent='Analisis belum selesai: '+(error.message||error);$('newsImageResult').innerHTML='<div class="result-box">Tidak ada rekomendasi dibuat dari pembacaan yang gagal.</div>'}
     finally{if(worker)await worker.terminate();button.disabled=false}
