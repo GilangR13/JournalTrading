@@ -1,0 +1,20 @@
+{
+  "updatedAt": "2026-10-14T03:20:00Z",
+  "coverage": "Jadwal rilis BLS AS yang telah dicocokkan; tidak mencakup semua negara atau pidato",
+  "events": [
+    {
+      "key": "US_CPI",
+      "dateWib": "2026-10-14",
+      "timeWib": "19:30",
+      "source": "Bureau of Labor Statistics - CPI release schedule",
+      "url": "https://www.bls.gov/schedule/news_release/cpi.htm"
+    },
+    {
+      "key": "US_PPI",
+      "dateWib": "2026-10-15",
+      "timeWib": "19:30",
+      "source": "Bureau of Labor Statistics - PPI release schedule",
+      "url": "https://www.bls.gov/schedule/news_release/ppi.htm"
+    }
+  ]
+}
